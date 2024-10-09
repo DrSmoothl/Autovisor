@@ -39,11 +39,30 @@ async def get_progress(page: Page):
     return curtime, total_time
 
 
+from rich.progress import Progress, BarColumn, TextColumn, TimeRemainingColumn
+from rich.console import Console
+
+console = Console()
+
+
 def show_progress(desc, cur_str=None, enableRepeat=False):
-    percent = int(cur_str.split("%")[0]) + 1  # Handles a 1% rendering error
-    if percent >= 80 and not enableRepeat:  # In learning mode, 80% progress is considered complete
+    # 将百分比字符串转换为整数
+    percent = int(cur_str.strip('%'))
+
+    # 如果是学习模式，并且进度达到或超过80%，则视为100%
+    if percent >= 80 and not enableRepeat:
         percent = 100
-    length = int(percent * 30 // 100)
-    progress = ("█" * length).ljust(30, " ")
-    percent_str = str(percent) + "%"
-    print(f"\r{desc} |{progress}| {percent_str}\t", end="", flush=True)
+
+    # 创建 Rich 的 Progress 对象
+    with Progress(
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=None),
+            TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
+            TimeRemainingColumn(),
+            console=console,
+    ) as progress:
+        # 添加任务到进度条
+        task_id = progress.add_task(description=desc, total=100)
+
+        # 更新任务进度
+        progress.update(task_id, completed=percent)

@@ -13,6 +13,7 @@ from res.utils import optimize_page, get_lesson_name, video_optimize, get_filter
 import rich
 from loguru import logger
 import argparse
+import sys
 
 #Logger配置
 
@@ -23,7 +24,6 @@ def setup_logger(log_level):
     # 添加一个新的日志处理器，设置日志级别和格式
     logger.add(
         "Runtime_log_{time}.log",
-        sink=sys.stderr,  # 输出到标准错误流
         level=log_level.upper(),  # 设置日志级别为用户指定的级别
         format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
         # 日志格式
@@ -32,7 +32,8 @@ def setup_logger(log_level):
     )
 
 #版本管理
-def GetConfig()
+def GetConfig(config: Config) -> Config:
+    logger.info(f"版本: {config.version}")
 
 
 # 获取全局事件循环
@@ -146,7 +147,7 @@ async def learning_loop(page: Page, config: Config):
         await page.wait_for_selector(".current_play", state="attached")
         await page.wait_for_timeout(1000)
         title = await get_lesson_name(page)
-        print("正在学习:%s" % title)
+        logger.info("正在学习:%s",title)
         page.set_default_timeout(10000)
         try:
             await video_optimize(page, config)
@@ -170,7 +171,7 @@ async def learning_loop(page: Page, config: Config):
                 elif await page.query_selector(".topic-title"):
                     await event_loop_answer.wait()
                 else:
-                    print(f"\n[Warn]{repr(e)}")
+                    logger.warn(f"\n{repr(e)}")
         if "current_play" in await all_class[cur_index].get_attribute('class'):
             cur_index += 1
         reachTimeLimit = await tail_work(page, start_time, all_class, title)
@@ -191,7 +192,7 @@ async def reviewing_loop(page: Page, config: Config):
         await page.wait_for_selector(".current_play", state="attached")
         await page.wait_for_timeout(1000)
         title = await get_lesson_name(page)
-        print("\n正在学习:%s" % title)
+        logger.info("\n正在学习:%s", title)
         page.set_default_timeout(10000)
         try:
             await video_optimize(page, config)
@@ -219,7 +220,7 @@ async def reviewing_loop(page: Page, config: Config):
                 elif await page.query_selector(".topic-title"):
                     await event_loop_answer.wait()
                 else:
-                    print(f"\n[Warn]{repr(e)}")
+                    logger.warn(f"\n{repr(e)}")
         if "current_play" in await all_class[cur_index].get_attribute('class'):
             cur_index += 1
         reachTimeLimit = await tail_work(page, course_start_time, all_class, title)
@@ -254,13 +255,14 @@ async def entrance(config: Config):
                     await reviewing_loop(page, config)
                 else:
                     await learning_loop(page, config)
-        print("==" * 10)
-        print("所有课程学习完毕!")
+        logger.info("\n\n")
+        logger.info("所有课程学习完毕!")
+        logger.info("改版作者留：如果你觉得有用的话，就请支持一下原作者吧！")
         show_donate("res/QRcode.jpg")
     except Exception as e:
-        print(f"\n[Error]:{repr(e)}")
+        print(f"\n:{repr(e)}")
         if isinstance(e, TargetClosedError):
-            print("[Error]检测到网页关闭,正在退出程序...")
+            logger.warning("检测到网页关闭,正在退出程序...")
     finally:
         # 结束所有协程任务
         await asyncio.gather(*tasks, return_exceptions=True) if tasks else None
@@ -278,27 +280,27 @@ if __name__ == "__main__":
     # 配置日志
     setup_logger(args.log_level)
     logger.info("墨梓柒改版，原作者CXRunfree")
+    config = Config()
+    GetConfig(config)
     logger.info("===== Runtime Log =====")
     try:
-        print("正在载入数据...")
+        logger.info("正在载入数据...")
         config = Config()
         asyncio.run(entrance(config))
     except Exception as e:
         if isinstance(e, KeyError):
-            input("[Error]可能是account文件的配置出错!")
+            logger.error("可能是account文件的配置出错!")
         elif isinstance(e, UserWarning):
-            input("[Error]是不是忘记填账号密码了?")
+            logger.error("是不是忘记填账号密码了?")
         elif isinstance(e, FileNotFoundError):
-            print(f"文件缺失: {e.filename}")
-            input("[Error]程序缺失依赖文件,请重新安装程序!")
+            logger.error(f"文件缺失: {e.filename}")
+            logger.error("程序缺失依赖文件,请重新安装程序!")
         elif isinstance(e, TargetClosedError):
-            input("[Error]糟糕,网页关闭了!")
+            logger.error("糟糕,网页关闭了!")
         elif isinstance(e, UnicodeDecodeError):
-            print("configs配置文件编码有误,保存时请选择utf-8或gbk!")
-            input(f"[Error]{e}")
+            logger.error("configs配置文件编码有误,保存时请选择utf-8或gbk!")
+            logger.error(f"{e}")
         else:
-            print(f"[Error]{e}")
-            with open("log.txt", "w", encoding="utf-8") as log:
-                log.write(traceback.format_exc())
-            print("错误日志已保存至:log.txt")
-            input("系统出错,请检查后重新启动!")
+            logger.error(f"{e}")
+            logger.error("错误日志已保存至:log.txt")
+            logger.error("系统出错,请检查后重新启动!")
