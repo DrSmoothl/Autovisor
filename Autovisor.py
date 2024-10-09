@@ -10,6 +10,30 @@ from playwright.async_api import TimeoutError
 from playwright._impl._errors import TargetClosedError
 from res.support import show_donate
 from res.utils import optimize_page, get_lesson_name, video_optimize, get_filtered_class
+import rich
+from loguru import logger
+import argparse
+
+#Logger配置
+
+def setup_logger(log_level):
+    # 移除默认的日志处理器
+    logger.remove()
+
+    # 添加一个新的日志处理器，设置日志级别和格式
+    logger.add(
+        "Runtime_log_{time}.log",
+        sink=sys.stderr,  # 输出到标准错误流
+        level=log_level.upper(),  # 设置日志级别为用户指定的级别
+        format="<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>",
+        # 日志格式
+        colorize=True,  # 启用颜色
+        rotation="5 MB"
+    )
+
+#版本管理
+def GetConfig()
+
 
 # 获取全局事件循环
 event_loop_verify = asyncio.Event()
@@ -28,7 +52,8 @@ async def auto_login(config: Config, page: Page):
 async def init_page(p: Playwright, config: Config) -> Tuple[Page, Browser]:
     driver = "msedge" if config.driver == "edge" else config.driver
     if not config.exe_path:
-        print(f"正在启动{config.driver}浏览器...")
+        drivername = config.driver
+        logger.info(f"正在启动{config.driver}浏览器...")
         browser = await p.chromium.launch(channel=driver, headless=False)
     else:
         print(f"正在启动{config.driver}浏览器...")
@@ -52,16 +77,16 @@ async def tail_work(page: Page, start_time, all_class, title) -> bool:
     page.set_default_timeout(24 * 3600 * 1000)
     time_period = (time.time() - start_time) / 60
     if 0 < config.limitMaxTime <= time_period:
-        print(f"\n当前课程已达时限:{config.limitMaxTime}min\n即将进入下门课程!")
+        logger.info(f"\n当前课程已达时限:{config.limitMaxTime}min\n即将进入下门课程!")
         reachTimeLimit = True
     else:
         class_name = await all_class[-1].get_attribute('class')
         if "current_play" in class_name:
-            print("\n已学完本课程全部内容!")
-            print("==" * 10)
+            logger.info("\n已学完本课程全部内容!")
+            logger.info("==" * 10)
         else:
-            print(f"\"{title}\" Done !")
-            print(f"本次课程已学习:{time_period:.1f} min")
+            logger.info(f"\"{title}\" Done !")
+            logger.info(f"本次课程已学习:{time_period:.1f} min")
     return reachTimeLimit
 
 
@@ -71,7 +96,7 @@ async def play_video(page: Page) -> None:
             await asyncio.sleep(0.5)
             playing = await page.query_selector(".pauseButton")
             if not playing:
-                print("[Info]检测到被暂停,正在尝试播放.", end="\r")
+                logger.debug("检测到被暂停,正在尝试播放.\n")
                 canvas = await page.wait_for_selector(".videoArea", state="attached")
                 await canvas.click()
         except TimeoutError:
@@ -82,6 +107,7 @@ async def skip_questions(page: Page, event_loop) -> None:
     while True:
         try:
             await asyncio.sleep(0.5)
+            logger.info(f"出现选择题，正在自动处理...")
             await page.wait_for_selector(".topic-item", state="attached", timeout=1000)
             if not await page.query_selector(".answer"):
                 choices = await page.locator(".topic-item").all()
@@ -91,7 +117,7 @@ async def skip_questions(page: Page, event_loop) -> None:
             await page.evaluate(config.close_ques)
             event_loop.set()
         except TimeoutError:
-            continue
+            logger.error(f"操作超时！")
 
 
 async def wait_for_verify(page: Page, event_loop) -> None:
@@ -99,18 +125,18 @@ async def wait_for_verify(page: Page, event_loop) -> None:
         try:
             await asyncio.sleep(1)
             await page.wait_for_selector(".yidun_modal__title", state="attached", timeout=1000)
-            print("\n检测到安全验证,请手动点击完成...")
+            logger.warning("\n检测到安全验证,请手动点击完成...")
             await page.wait_for_selector(".yidun_modal__title", state="hidden", timeout=24 * 3600 * 1000)
             event_loop.set()
-            print("\n安全验证已完成,继续播放...")
+            logger.info("\n安全验证已完成,继续播放...")
         except TimeoutError:
-            continue
+            logger.error(f"操作超时！")
 
 
 async def learning_loop(page: Page, config: Config):
     title_selector = await page.wait_for_selector(".source-name")
     course_title = await title_selector.text_content()
-    print(f"当前课程:<<{course_title}>>")
+    logger.info(f"当前课程:<<{course_title}>>")
     await page.wait_for_selector(".clearfix.video", state="attached")
     all_class = await get_filtered_class(page)
     start_time = time.time()
@@ -242,8 +268,17 @@ async def entrance(config: Config):
 
 
 if __name__ == "__main__":
-    print("Github:CXRunfree All Rights Reserved.")
-    print("===== Runtime Log =====")
+    # 创建解析器
+    parser = argparse.ArgumentParser(description="A script that logs messages with a specified log level.")
+    # 添加日志级别的参数，默认是INFO
+    parser.add_argument('--log-level', type=str, default='INFO',
+                        help='The minimum log level to output (DEBUG, INFO, WARNING, ERROR, CRITICAL)')
+    # 解析命令行参数
+    args = parser.parse_args()
+    # 配置日志
+    setup_logger(args.log_level)
+    logger.info("墨梓柒改版，原作者CXRunfree")
+    logger.info("===== Runtime Log =====")
     try:
         print("正在载入数据...")
         config = Config()
